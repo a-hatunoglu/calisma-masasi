@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Çalışma Masası</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Çalışma Masası">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🩺</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Source+Serif+4:opsz,wght@8..60,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<main>
+  <header class="hub-head">
+    <h1>Çalışma masası</h1>
+    <p class="lede">Üç ders, bölüm bölüm. Her bölümde önce kısa bir ön test, sonra parça parça anlatım ve geri çağırma soruları, en sonda her şıkkı açıklanan bir pekiştirme sınavı var.</p>
+  </header>
+  <ul class="courses" id="list" role="list"></ul>
+  <p class="foot">İlerleme bu tarayıcıda saklanır. Başka bir tarayıcıda açarsan sıfırdan başlar.</p>
+</main>
+<script src="data/ozet.js"></script>
+<script>
+(function () {
+  var COLORS = { biyoistatistik: '#2b4f8a', ortopedik: '#6c3658', pulmoner: '#0a6b63' };
+  var list = document.getElementById('list');
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  (window.OZET || []).forEach(function (c) {
+    var st = {};
+    try { st = JSON.parse(localStorage.getItem('ogrenme:' + c.id)) || {}; } catch (e) {}
+    var mods = st.mods || {};
+    var n = c.modules.length, W = 260, H = 70;
+    var pts = [], done = 0;
+    c.modules.forEach(function (m, i) {
+      var q = mods[m.id] && mods[m.id].quiz;
+      if (q) { pts.push([(n === 1 ? W / 2 : 8 + i * (W - 16) / (n - 1)), 8 + (1 - q.best / 100) * (H - 16)]); if (q.best >= 70) done++; }
+    });
+    var spark = '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true">' +
+      (pts.length > 1 ? '<polyline points="' + pts.map(function (p) { return p.join(','); }).join(' ') + '"/>' : '') +
+      pts.map(function (p) { return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="3"/>'; }).join('') + '</svg>';
+    var li = document.createElement('li');
+    li.innerHTML = '<a href="' + c.id + '.html" style="--c:' + COLORS[c.id] + '"><div><h2>' + esc(c.title) + '</h2><p>' + esc(c.blurb) + '</p>' +
+      '<div class="stats"><span>' + n + ' bölüm</span><span>' + c.questions + ' soru</span><span>' + c.cards + ' kart</span><span>' + done + ' bölüm tamam</span></div></div>' +
+      '<div>' + spark + '<div class="small muted" style="margin-top:6px">' + (pts.length ? 'Bölüm puanların' : 'Henüz sınav çözülmedi') + '</div></div></a>';
+    list.appendChild(li);
+  });
+})();
+</script>
+</body>
+</html>

@@ -20,6 +20,18 @@
     try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* tarayıcı depolaması kapalı olabilir */ }
     s = s || {};
     s.mods = s.mods || {}; s.wrong = s.wrong || {}; s.cards = s.cards || {}; s.plan = s.plan || null; s.log = s.log || [];
+    s.notebook = s.notebook || {
+      activeId: 'sayfa-1',
+      pages: [
+        { id: 'sayfa-1', title: 'Genel Notlar', text: '', updatedAt: Date.now() }
+      ]
+    };
+    if (!s.notebook.pages || !s.notebook.pages.length) {
+      s.notebook = {
+        activeId: 'sayfa-1',
+        pages: [{ id: 'sayfa-1', title: 'Genel Notlar', text: '', updatedAt: Date.now() }]
+      };
+    }
     return s;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* yok say */ } }
@@ -49,7 +61,7 @@
 
   /* ---------------- kabuk ---------------- */
   const NAV = [
-    ['#/', 'Bölümler'], ['#/program', 'Program'], ['#/tekrar', 'Tekrar'], ['#/kartlar', 'Kartlar'], ['#/deneme', 'Deneme sınavı']
+    ['#/', 'Bölümler'], ['#/program', 'Program'], ['#/tekrar', 'Tekrar'], ['#/kartlar', 'Kartlar'], ['#/deneme', 'Deneme sınavı'], ['#/notlar', 'Not defteri']
   ];
   if (C.hasCalc) NAV.push(['#/hesap', 'Hesap atölyesi']);
   if (C.id === 'biyoistatistik') NAV.push(['#/simulasyon', '🎯 Sınav Simülasyonu']);
@@ -57,6 +69,7 @@
     const nav = NAV.map(([href, t]) => `<a href="${href}"${active === href ? ' aria-current="page"' : ''}>${t}</a>`).join('');
     $app.innerHTML = `<header class="top"><a class="home" href="index.html">Çalışma masası</a><span class="sep">/</span>
       <a class="course-name" href="#/">${esc(C.title)}</a><nav aria-label="Ders menüsü">${nav}</nav></header><main id="main"></main>`;
+    initToolDrawer();
     const main = document.getElementById('main');
     if (typeof inner === 'string') main.innerHTML = inner; else if (inner) main.appendChild(inner);
     window.scrollTo(0, 0);
@@ -100,6 +113,8 @@
     return null;
   }
   function viewHome() {
+    currentModId = null;
+    updateDrawerCounts();
     const totalQ = MODS.reduce((a, m) => a + m.questions.length, 0);
     const done = MODS.filter(m => (mastery(m.id) || 0) >= 70).length;
     const nx = nextStep();
@@ -136,6 +151,7 @@
         <a class="tool" href="#/tekrar"><span class="count">${wrongN}</span><h3>Hata defteri ve karma tekrar</h3><p>Yanlışların, üst üste iki kez doğru yapana kadar geri gelir.</p></a>
         <a class="tool" href="#/kartlar"><span class="count">${dueCards}</span><h3>Bugünkü kartlar</h3><p>Leitner kutuları: bildiğin kart seyrek, bilemediğin sık gelir.</p></a>
         <a class="tool" href="#/deneme"><h3>Deneme sınavı</h3><p>Süreli, karışık bölümlerden; açıklamalar sınav sonunda.</p></a>
+        <a class="tool" href="#/notlar"><span class="count">${S.notebook.pages.length} sayfa</span><h3>Not defteri & Sözlük</h3><p>${esc(C.title)} dersine özel notların ve tüm bölümlerin kavramlar sözlüğü.</p></a>
         ${C.hasCalc ? `<a class="tool" href="#/hesap"><h3>Hesap atölyesi</h3><p>Her seferinde yeni veri seti; adım adım çözüm.</p></a>` : ''}
         ${C.id === 'biyoistatistik' ? `<a class="tool" href="#/simulasyon" style="border-left: 4px solid var(--accent);"><span class="count">2 Mod</span><h3>🎯 Vize Sınavı Simülasyonu</h3><p>Hocanın derste çözdüğü Excel frekans tablosu, dağılım ölçüleri ve parametrik test şartları (Seçenek 1: Tablo Sınavı, Seçenek 2: Soru Soru Test).</p></a>` : ''}
       </div>
@@ -149,6 +165,8 @@
   ];
   function viewModule(id, step, arg) {
     const m = MOD[id]; if (!m) return viewHome();
+    currentModId = id;
+    if (drawerEl && drawerEl.classList.contains('open')) renderDrawerBody(); else updateDrawerCounts();
     step = step || firstOpenStep(id);
     const x = ms(id);
     const stepNav = STEPS.map(s => `<li><a href="#/m/${id}/${s.k}" class="${x.steps[s.k] ? 'done' : ''}"${s.k === step ? ' aria-current="step"' : ''}>${s.t}</a></li>`).join('');
@@ -458,6 +476,8 @@
 
   /* ---------------- tekrar / hata defteri ---------------- */
   function viewTekrar() {
+    currentModId = null;
+    updateDrawerCounts();
     const wrongIds = Object.keys(S.wrong).filter(id => QIDX[id]);
     const startedMods = MODS.filter(m => S.mods[m.id] && S.mods[m.id].quiz);
     const main = shell('#/tekrar', `<h1>Tekrar</h1><p class="lede">Karışık (serpiştirilmiş) tekrar, konuları birbirinden ayırt etmeyi öğretir. Hata defterindeki sorular önce gelir.</p>
@@ -486,6 +506,8 @@
   }
 
   function viewKartlar() {
+    currentModId = null;
+    updateDrawerCounts();
     const due = dueCardList();
     const main = shell('#/kartlar', `<h1>Bugünkü kartlar</h1><p class="lede">Sadece öğrenmeye başladığın bölümlerin kartları burada çıkar. Kutu 1 her gün, kutu 5 ayda bir gelir.</p>
       <div class="panel" style="margin-top:32px" id="deck"></div>`);
@@ -500,6 +522,8 @@
 
   /* ---------------- deneme sınavı ---------------- */
   function viewDeneme() {
+    currentModId = null;
+    updateDrawerCounts();
     const checks = MODS.map(m => `<label><input type="checkbox" value="${m.id}" checked> ${esc(m.title)}</label>`).join('');
     const main = shell('#/deneme', `<h1>Deneme sınavı</h1><p class="lede">Gerçek sınav koşulu: süre işler, soru sırasında geri bildirim yok. Bitince tüm şıkların açıklamaları gelir.</p>
       <div class="panel" style="margin-top:32px" id="cfg"><div class="form-grid">
@@ -589,6 +613,8 @@
     return { days, unscheduled: left, learnTotal: learn.reduce((a, t) => a + t.min, 0) };
   }
   function viewProgram() {
+    currentModId = null;
+    updateDrawerCounts();
     const p = S.plan;
     const t0 = today0();
     const iso = t => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -640,6 +666,8 @@
 
   /* ---------------- hesap atölyesi ---------------- */
   function viewHesap() {
+    currentModId = null;
+    updateDrawerCounts();
     const H = window.HESAP;
     if (!H) return viewHome();
     const main = shell('#/hesap', `<h1>Hesap atölyesi</h1><p class="lede">Her soruda yeni bir veri seti. Önce elle çöz, sonra cevabını yaz. Yanlışsa adım adım çözüm açılır.</p>
@@ -675,6 +703,8 @@
 
   /* ---------------- sınav simülasyonu ---------------- */
   function viewSimulasyon() {
+    currentModId = null;
+    updateDrawerCounts();
     const Sim = window.SIMULASYON;
     const m6 = MOD['biyo-05'] || MODS[MODS.length - 1];
     const main = shell('#/simulasyon', `<div id="sim-app-root"></div>`);
@@ -684,6 +714,468 @@
     } else {
       root.innerHTML = '<div class="empty">Sınav simülasyonu yükleniyor veya bulunamadı.</div>';
     }
+  }
+
+  /* ---------------- yüzen araç paneli (kavramlar sözlüğü + not defteri) ---------------- */
+  let currentModId = null;
+  let drawerTab = 'glossary';
+  let glScope = 'mod';
+  let glFilter = '';
+  let drawerEl = null, fabEl = null, backdropEl = null;
+
+  function getCourseGlossary() {
+    const list = [];
+    for (const m of MODS) {
+      if (m.glossary && m.glossary.length) {
+        for (const item of m.glossary) {
+          list.push({ term: item.term, def: item.def, mid: m.id, mtitle: m.title });
+        }
+      }
+    }
+    return list.sort((a, b) => a.term.localeCompare(b.term, 'tr'));
+  }
+
+  function initToolDrawer() {
+    if (document.getElementById('tool-drawer-root')) return;
+
+    const wrap = document.createElement('div');
+    wrap.id = 'tool-drawer-root';
+    wrap.innerHTML = `
+      <button class="fab-toggle" id="fab-tool-toggle" aria-label="Kavramlar Sözlüğü ve Not Defteri" title="Kavramlar ve Notlarım">
+        <span class="fab-icon">📖</span>
+      </button>
+      <div class="drawer-backdrop" id="tool-drawer-backdrop"></div>
+      <aside class="tool-drawer" id="tool-drawer" aria-label="Kavramlar ve Notlar Paneli">
+        <div class="td-header">
+          <button class="td-tab active" data-tab="glossary">📖 Sözlük <span class="gl-badge" id="td-gl-count">0</span></button>
+          <button class="td-tab" data-tab="notes">📝 Notlarım <span class="gl-badge" id="td-nb-count">1</span></button>
+          <button class="td-close" id="td-close-btn" aria-label="Kapat">×</button>
+        </div>
+        <div class="td-body" id="td-body"></div>
+      </aside>
+    `;
+    document.body.appendChild(wrap);
+
+    fabEl = document.getElementById('fab-tool-toggle');
+    backdropEl = document.getElementById('tool-drawer-backdrop');
+    drawerEl = document.getElementById('tool-drawer');
+
+    fabEl.addEventListener('click', toggleDrawer);
+    backdropEl.addEventListener('click', closeDrawer);
+    document.getElementById('td-close-btn').addEventListener('click', closeDrawer);
+
+    wrap.querySelectorAll('.td-tab').forEach(b => {
+      b.addEventListener('click', () => {
+        drawerTab = b.dataset.tab;
+        wrap.querySelectorAll('.td-tab').forEach(t => t.classList.toggle('active', t === b));
+        renderDrawerBody();
+      });
+    });
+
+    updateDrawerCounts();
+  }
+
+  function toggleDrawer() {
+    if (!drawerEl) initToolDrawer();
+    const isOpen = drawerEl.classList.toggle('open');
+    fabEl.setAttribute('aria-expanded', String(isOpen));
+    backdropEl.classList.toggle('show', isOpen);
+    fabEl.querySelector('.fab-icon').textContent = isOpen ? '✕' : (drawerTab === 'notes' ? '📝' : '📖');
+    if (isOpen) renderDrawerBody();
+  }
+
+  function closeDrawer() {
+    if (!drawerEl) return;
+    drawerEl.classList.remove('open');
+    backdropEl.classList.remove('show');
+    fabEl.setAttribute('aria-expanded', 'false');
+    fabEl.querySelector('.fab-icon').textContent = '📖';
+  }
+
+  function openDrawer(tab) {
+    if (!drawerEl) initToolDrawer();
+    if (tab) {
+      drawerTab = tab;
+      document.querySelectorAll('#tool-drawer-root .td-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+      });
+    }
+    if (!drawerEl.classList.contains('open')) toggleDrawer();
+    else renderDrawerBody();
+  }
+
+  function updateDrawerCounts() {
+    const glCountEl = document.getElementById('td-gl-count');
+    const nbCountEl = document.getElementById('td-nb-count');
+    if (glCountEl) {
+      const curM = currentModId ? MOD[currentModId] : null;
+      const count = (glScope === 'mod' && curM && curM.glossary) ? curM.glossary.length : getCourseGlossary().length;
+      glCountEl.textContent = count;
+    }
+    if (nbCountEl && S.notebook && S.notebook.pages) {
+      nbCountEl.textContent = S.notebook.pages.length;
+    }
+  }
+
+  function renderDrawerBody() {
+    const body = document.getElementById('td-body');
+    if (!body) return;
+    updateDrawerCounts();
+
+    if (drawerTab === 'glossary') {
+      renderGlossaryTab(body);
+    } else {
+      renderNotesTab(body);
+    }
+  }
+
+  function renderGlossaryTab(body) {
+    const curM = currentModId ? MOD[currentModId] : null;
+    const allTerms = getCourseGlossary();
+    const modTerms = (curM && curM.glossary) ? curM.glossary.map(g => ({ ...g, mid: curM.id, mtitle: curM.title })) : [];
+
+    if (!curM) glScope = 'all';
+
+    const sourceList = (glScope === 'mod' && curM) ? modTerms : allTerms;
+    const q = (glFilter || '').trim().toLowerCase();
+    const filtered = sourceList.filter(g => !q || g.term.toLowerCase().includes(q) || g.def.toLowerCase().includes(q));
+
+    const scopeBar = curM ? `
+      <div class="gl-scope-bar">
+        <button class="gl-scope-btn${glScope === 'mod' ? ' active' : ''}" id="gl-scope-mod">Bu Bölüm (${modTerms.length})</button>
+        <button class="gl-scope-btn${glScope === 'all' ? ' active' : ''}" id="gl-scope-all">Tüm Ders (${allTerms.length})</button>
+      </div>
+    ` : '';
+
+    body.innerHTML = `
+      <div class="gl-search">
+        <input type="search" id="gl-drawer-search" placeholder="Kavram veya açıklama ara..." value="${esc(glFilter)}">
+      </div>
+      ${scopeBar}
+      <div class="gl-list" id="gl-drawer-list">
+        ${!filtered.length ? '<div class="gl-empty">Eşleşen kavram bulunamadı.</div>' :
+          filtered.map((g, idx) => `
+            <div class="gl-item${q ? ' open' : (idx < 2 ? ' open' : '')}">
+              <div class="gl-term">
+                <span>${esc(g.term)}</span>
+                ${glScope === 'all' && g.mid !== (curM && curM.id) ? `<span class="tag" style="font-size:11px;margin-right:8px">${esc(g.mtitle.slice(0, 16))}...</span>` : ''}
+              </div>
+              <div class="gl-def">${esc(g.def)}</div>
+            </div>
+          `).join('')}
+      </div>
+    `;
+
+    const searchInp = body.querySelector('#gl-drawer-search');
+    searchInp.addEventListener('input', e => {
+      glFilter = e.target.value;
+      const listEl = document.getElementById('gl-drawer-list');
+      if (listEl) {
+        const curQ = glFilter.trim().toLowerCase();
+        const curFiltered = sourceList.filter(g => !curQ || g.term.toLowerCase().includes(curQ) || g.def.toLowerCase().includes(curQ));
+        listEl.innerHTML = !curFiltered.length ? '<div class="gl-empty">Eşleşen kavram bulunamadı.</div>' :
+          curFiltered.map(g => `
+            <div class="gl-item${curQ ? ' open' : ''}">
+              <div class="gl-term">
+                <span>${esc(g.term)}</span>
+                ${glScope === 'all' && g.mid !== (curM && curM.id) ? `<span class="tag" style="font-size:11px;margin-right:8px">${esc(g.mtitle.slice(0, 16))}...</span>` : ''}
+              </div>
+              <div class="gl-def">${esc(g.def)}</div>
+            </div>
+          `).join('');
+        listEl.querySelectorAll('.gl-term').forEach(termEl => {
+          termEl.addEventListener('click', () => {
+            termEl.closest('.gl-item').classList.toggle('open');
+          });
+        });
+      }
+    });
+
+    const btnMod = body.querySelector('#gl-scope-mod');
+    const btnAll = body.querySelector('#gl-scope-all');
+    if (btnMod) btnMod.addEventListener('click', () => { glScope = 'mod'; renderDrawerBody(); });
+    if (btnAll) btnAll.addEventListener('click', () => { glScope = 'all'; renderDrawerBody(); });
+
+    body.querySelectorAll('.gl-term').forEach(termEl => {
+      termEl.addEventListener('click', () => {
+        termEl.closest('.gl-item').classList.toggle('open');
+      });
+    });
+  }
+
+  function renderNotesTab(body) {
+    const nb = S.notebook;
+    let activePage = nb.pages.find(p => p.id === nb.activeId) || nb.pages[0];
+    if (!activePage) {
+      activePage = { id: 'sayfa-' + Date.now(), title: 'Genel Notlar', text: '', updatedAt: Date.now() };
+      nb.pages = [activePage];
+      nb.activeId = activePage.id;
+      save();
+    }
+
+    body.innerHTML = `
+      <div class="nb-bar">
+        ${nb.pages.map(p => `
+          <button class="nb-tab${p.id === activePage.id ? ' active' : ''}" data-pid="${p.id}">
+            <span>${esc(p.title || 'İsimsiz')}</span>
+            ${nb.pages.length > 1 ? `<span class="nb-x" data-del="${p.id}" title="Sayfayı sil">×</span>` : ''}
+          </button>
+        `).join('')}
+        <button class="nb-add" id="nb-drawer-add" title="Yeni sayfa ekle">+</button>
+      </div>
+      <div class="nb-editor">
+        <div class="nb-title-row">
+          <input type="text" class="nb-title-input" id="nb-drawer-title" value="${esc(activePage.title)}" placeholder="Sayfa başlığı...">
+          <span class="nb-saved" id="nb-drawer-saved">Kaydedildi ✓</span>
+        </div>
+        <textarea class="nb-textarea" id="nb-drawer-text" placeholder="${esc(C.title)} dersine özel notlarını yaz...">${esc(activePage.text || '')}</textarea>
+        <div class="nb-meta">
+          <span id="nb-drawer-chars">${(activePage.text || '').length} karakter</span> ·
+          <span id="nb-drawer-words">${(activePage.text || '').trim() ? (activePage.text || '').trim().split(/\s+/).length : 0} kelime</span>
+        </div>
+      </div>
+    `;
+
+    const titleInp = body.querySelector('#nb-drawer-title');
+    const textArea = body.querySelector('#nb-drawer-text');
+    const savedBadge = body.querySelector('#nb-drawer-saved');
+    const charEl = body.querySelector('#nb-drawer-chars');
+    const wordEl = body.querySelector('#nb-drawer-words');
+
+    let saveTimer = null;
+    function showSaved() {
+      savedBadge.classList.add('show');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => savedBadge.classList.remove('show'), 1500);
+    }
+
+    titleInp.addEventListener('input', () => {
+      activePage.title = titleInp.value;
+      activePage.updatedAt = Date.now();
+      save();
+      const tabSpan = body.querySelector(`.nb-tab[data-pid="${activePage.id}"] span`);
+      if (tabSpan) tabSpan.textContent = activePage.title || 'İsimsiz';
+      showSaved();
+    });
+
+    textArea.addEventListener('input', () => {
+      activePage.text = textArea.value;
+      activePage.updatedAt = Date.now();
+      save();
+      charEl.textContent = `${activePage.text.length} karakter`;
+      const words = activePage.text.trim() ? activePage.text.trim().split(/\s+/).length : 0;
+      wordEl.textContent = `${words} kelime`;
+      showSaved();
+    });
+
+    body.querySelectorAll('.nb-tab').forEach(tab => {
+      tab.addEventListener('click', e => {
+        if (e.target.classList.contains('nb-x')) return;
+        nb.activeId = tab.dataset.pid;
+        save();
+        renderDrawerBody();
+      });
+    });
+
+    body.querySelectorAll('.nb-x').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const pid = btn.dataset.del;
+        const pageToDelete = nb.pages.find(p => p.id === pid);
+        if (confirm(`"${pageToDelete ? pageToDelete.title : 'Bu sayfa'}" silinecek. Onaylıyor musun?`)) {
+          nb.pages = nb.pages.filter(p => p.id !== pid);
+          nb.activeId = nb.pages[0].id;
+          save();
+          renderDrawerBody();
+        }
+      });
+    });
+
+    body.querySelector('#nb-drawer-add').addEventListener('click', () => {
+      const newPage = {
+        id: 'sayfa-' + Date.now(),
+        title: 'Not ' + (nb.pages.length + 1),
+        text: '',
+        updatedAt: Date.now()
+      };
+      nb.pages.push(newPage);
+      nb.activeId = newPage.id;
+      save();
+      renderDrawerBody();
+      const newTitleInp = document.getElementById('nb-drawer-title');
+      if (newTitleInp) newTitleInp.focus();
+    });
+  }
+
+  function updateDrawerNoteTab() {
+    if (drawerTab === 'notes' && drawerEl && drawerEl.classList.contains('open')) {
+      renderDrawerBody();
+    }
+  }
+
+  /* ---------------- not defteri ve sözlük (tam sayfa) ---------------- */
+  function viewNotlar() {
+    currentModId = null;
+    updateDrawerCounts();
+    const nb = S.notebook;
+    let activePage = nb.pages.find(p => p.id === nb.activeId) || nb.pages[0];
+    if (!activePage) {
+      activePage = { id: 'sayfa-' + Date.now(), title: 'Genel Notlar', text: '', updatedAt: Date.now() };
+      nb.pages = [activePage];
+      nb.activeId = activePage.id;
+      save();
+    }
+
+    const courseGlossary = getCourseGlossary();
+
+    const main = shell('#/notlar', `
+      <div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <h1>${esc(C.title)} Not Defteri</h1>
+        <button class="btn ghost" id="open-gl-btn">📖 Yüzen Sözlüğü Aç (${courseGlossary.length})</button>
+      </div>
+      <p class="lede">Bu derse dair notlarını sekmeler halinde düzenle. Çalışırken sayfanın sağ altındaki yüzen düğmeden de notlarına ve kavramlar sözlüğüne her an erişebilirsin.</p>
+
+      <div class="notes-page-layout">
+        <aside class="notes-sidebar">
+          <div class="row" style="justify-content:space-between;margin-bottom:12px">
+            <strong>Sayfalar (${nb.pages.length})</strong>
+            <button class="btn quiet" id="pg-add-page" style="padding:4px 10px;font-size:13px;min-height:32px">+ Yeni sayfa</button>
+          </div>
+          <ul class="notes-sidebar-list" id="pg-page-list">
+            ${nb.pages.map(p => {
+              const active = p.id === activePage.id;
+              const preview = (p.text || '').trim().slice(0, 40) || 'Henüz not yazılmadı...';
+              return `<li class="notes-sidebar-item${active ? ' active' : ''}" data-id="${p.id}">
+                <div class="nst">${esc(p.title || 'İsimsiz')}</div>
+                <div class="nsm">${esc(preview)}</div>
+              </li>`;
+            }).join('')}
+          </ul>
+        </aside>
+
+        <section class="notes-main-editor">
+          <div class="nb-title-row" style="padding:0 0 12px;border-bottom:1px solid var(--rule-soft)">
+            <input type="text" class="nb-title-input" id="pg-title-inp" value="${esc(activePage.title)}" placeholder="Sayfa başlığı...">
+            <span class="nb-saved" id="pg-saved-badge">Kaydedildi ✓</span>
+            ${nb.pages.length > 1 ? `<button class="btn quiet" id="pg-del-btn" style="padding:4px 10px;font-size:13px;min-height:32px;color:var(--bad)">Sayfayı sil</button>` : ''}
+          </div>
+          <textarea class="nb-textarea" id="pg-textarea" style="flex:1;min-height:340px;margin-top:12px" placeholder="${esc(C.title)} dersine özel notlarını buraya yazabilirsin...">${esc(activePage.text || '')}</textarea>
+          <div class="nb-meta" style="padding:10px 0 0;margin-top:12px">
+            <span id="pg-char-count">${(activePage.text || '').length} karakter</span> ·
+            <span id="pg-word-count">${(activePage.text || '').trim() ? (activePage.text || '').trim().split(/\s+/).length : 0} kelime</span> ·
+            <span>Son düzenleme: ${fmtDate(activePage.updatedAt || Date.now())}</span>
+          </div>
+        </section>
+      </div>
+
+      <div class="section-title" style="margin-top:48px">
+        <h2>${esc(C.title)} Kavramlar Sözlüğü (${courseGlossary.length} Terim)</h2>
+        <span class="muted small">Tüm bölümlerdeki tıbbi ve teknik terimler</span>
+      </div>
+      <div class="panel">
+        <div class="field" style="max-width:400px;margin-bottom:16px">
+          <label for="pg-gl-search">Sözlükte Ara</label>
+          <input type="search" id="pg-gl-search" placeholder="Terim veya açıklama ara...">
+        </div>
+        <div id="pg-gl-container"></div>
+      </div>
+    `);
+
+    const titleInp = main.querySelector('#pg-title-inp');
+    const textArea = main.querySelector('#pg-textarea');
+    const savedBadge = main.querySelector('#pg-saved-badge');
+    const charCount = main.querySelector('#pg-char-count');
+    const wordCount = main.querySelector('#pg-word-count');
+
+    let saveTimeout = null;
+    function triggerSave() {
+      savedBadge.classList.add('show');
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => savedBadge.classList.remove('show'), 1500);
+      updateDrawerNoteTab();
+    }
+
+    titleInp.addEventListener('input', () => {
+      activePage.title = titleInp.value;
+      activePage.updatedAt = Date.now();
+      save();
+      const sidebarItem = main.querySelector(`.notes-sidebar-item[data-id="${activePage.id}"] .nst`);
+      if (sidebarItem) sidebarItem.textContent = activePage.title || 'İsimsiz';
+      triggerSave();
+    });
+
+    textArea.addEventListener('input', () => {
+      activePage.text = textArea.value;
+      activePage.updatedAt = Date.now();
+      save();
+      charCount.textContent = `${activePage.text.length} karakter`;
+      const words = activePage.text.trim() ? activePage.text.trim().split(/\s+/).length : 0;
+      wordCount.textContent = `${words} kelime`;
+      const sidebarPreview = main.querySelector(`.notes-sidebar-item[data-id="${activePage.id}"] .nsm`);
+      if (sidebarPreview) sidebarPreview.textContent = activePage.text.trim().slice(0, 40) || 'Henüz not yazılmadı...';
+      triggerSave();
+    });
+
+    main.querySelectorAll('.notes-sidebar-item').forEach(li => {
+      li.addEventListener('click', () => {
+        nb.activeId = li.dataset.id;
+        save();
+        viewNotlar();
+      });
+    });
+
+    main.querySelector('#pg-add-page').addEventListener('click', () => {
+      const newPage = {
+        id: 'sayfa-' + Date.now(),
+        title: 'Not ' + (nb.pages.length + 1),
+        text: '',
+        updatedAt: Date.now()
+      };
+      nb.pages.push(newPage);
+      nb.activeId = newPage.id;
+      save();
+      viewNotlar();
+    });
+
+    const delBtn = main.querySelector('#pg-del-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', () => {
+        if (confirm(`"${activePage.title || 'Bu sayfa'}" silinecek. Onaylıyor musun?`)) {
+          nb.pages = nb.pages.filter(p => p.id !== activePage.id);
+          nb.activeId = nb.pages[0].id;
+          save();
+          viewNotlar();
+        }
+      });
+    }
+
+    main.querySelector('#open-gl-btn').addEventListener('click', () => openDrawer('glossary'));
+
+    const glBox = main.querySelector('#pg-gl-container');
+    const glSearch = main.querySelector('#pg-gl-search');
+    function renderPageGlossary(q) {
+      q = (q || '').trim().toLowerCase();
+      const filtered = courseGlossary.filter(g => !q || g.term.toLowerCase().includes(q) || g.def.toLowerCase().includes(q));
+      if (!filtered.length) {
+        glBox.innerHTML = '<p class="empty">Eşleşen kavram bulunamadı.</p>';
+        return;
+      }
+      glBox.innerHTML = `
+        <div class="gl-list" style="padding:0">
+          ${filtered.map(g => `
+            <div class="gl-item open" style="padding:12px 0">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <strong style="color:var(--accent);font-size:16px">${esc(g.term)}</strong>
+                <span class="tag">${esc(g.mtitle)}</span>
+              </div>
+              <p style="margin:6px 0 0;font-family:var(--f-read);font-size:16px;color:var(--ink-2)">${esc(g.def)}</p>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+    glSearch.addEventListener('input', e => renderPageGlossary(e.target.value));
+    renderPageGlossary('');
   }
 
   /* ---------------- yönlendirme ---------------- */
@@ -699,6 +1191,7 @@
       case 'deneme': return viewDeneme();
       case 'hesap': return viewHesap();
       case 'simulasyon': return viewSimulasyon();
+      case 'notlar': return viewNotlar();
       default: return viewHome();
     }
   }

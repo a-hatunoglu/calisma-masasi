@@ -15,10 +15,20 @@
   const KEY = 'ogrenme:' + C.id;
   const DAY = 86400000;
   let S = load();
+  save();
   function load() {
     let s = null;
     try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* tarayıcı depolaması kapalı olabilir */ }
     s = s || {};
+    // Ortopedik dersi için müfredat ve zihin haritası baştan yapılandırıldığından ilerlemeyi sıfırla, kişisel notları koru:
+    if (C.id === 'ortopedik' && s.ortoVersion !== '2026-v2') {
+      s.mods = {};
+      s.wrong = {};
+      s.cards = {};
+      s.plan = null;
+      s.log = [];
+      s.ortoVersion = '2026-v2';
+    }
     s.mods = s.mods || {}; s.wrong = s.wrong || {}; s.cards = s.cards || {}; s.plan = s.plan || null; s.log = s.log || [];
     s.notebook = s.notebook || {
       activeId: 'sayfa-1',

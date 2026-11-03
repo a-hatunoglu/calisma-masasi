@@ -21,13 +21,13 @@
     try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* tarayıcı depolaması kapalı olabilir */ }
     s = s || {};
     // Ortopedik dersi için müfredat ve zihin haritası baştan yapılandırıldığından ilerlemeyi sıfırla, kişisel notları koru:
-    if (C.id === 'ortopedik' && s.ortoVersion !== '2026-v2') {
+    if (C.id === 'ortopedik' && s.ortoVersion !== '2026-v3') {
       s.mods = {};
       s.wrong = {};
       s.cards = {};
       s.plan = null;
       s.log = [];
-      s.ortoVersion = '2026-v2';
+      s.ortoVersion = '2026-v3';
     }
     // Pulmoner dersi için zihin haritası ve 2026-2027 müfredatı baştan yapılandırıldığından ilerlemeyi sıfırla, kişisel notları koru:
     if (C.id === 'pulmoner' && s.pulmVersion !== '2026-v2') {
